@@ -15,7 +15,7 @@ using ProcessRegression, Test, LinearAlgebra
             length(fix_unexplained) > 0 ? fix_unexplained : [1.0, 0],
         )
 
-        pm = emulate(par; n=n, m=m, fix_unexplained=fix_unexplained)
+        pm = emulate(par; n = n, m = m, fix_unexplained = fix_unexplained)
         fit!(pm; verbose = false)
         coef(pm)
         println(coeftable(pm))
@@ -29,7 +29,7 @@ end
     n = 1000 # Number of groups
     m = 5    # Average number of observations per group
 
-    pm = emulate(par; n=n, m=m)
+    pm = emulate(par; n = n, m = m)
 
     ll = loglike(pm, par)
     score_mn, score_sc, score_sm, score_ux = score(pm, par)

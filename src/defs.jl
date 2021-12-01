@@ -24,7 +24,7 @@ end
 
 abstract type AbstractXmat end
 
-mutable struct Xmat{T} <:AbstractXmat where{T<:Real}
+mutable struct Xmat{T} <: AbstractXmat where {T<:Real}
 
     # Explanatory variables for the mean
     mean::Matrix{T}
@@ -40,13 +40,13 @@ mutable struct Xmat{T} <:AbstractXmat where{T<:Real}
 
 end
 
-mutable struct ProcessMLEModel{T} <:ProcessModel where {T<:Real}
+mutable struct ProcessMLEModel{T} <: ProcessModel where {T<:Real}
 
     # Responses
     y::Vector{T}
 
-	# The design matrices
-	X::Xmat{T}
+    # The design matrices
+    X::Xmat{T}
 
     # Times at which responses are observed
     time::Vector{T}
@@ -54,8 +54,8 @@ mutable struct ProcessMLEModel{T} <:ProcessModel where {T<:Real}
     # Beginning and ending indices (inclusive) for each group
     grp::Matrix{Int}
 
-	# Group labels
-	grplab::AbstractVector
+    # Group labels
+    grplab::AbstractVector
 
     # Estimated parameters
     params::ProcessParams

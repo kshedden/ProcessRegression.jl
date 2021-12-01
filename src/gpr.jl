@@ -67,7 +67,7 @@ function loglike(m::ProcessMLEModel{T}, par::GaussianParams{T})::T where {T<:Rea
         # Get the explained covariance matrix for this person.
         cm = covmat(cpar, m.time[i1:i2])
 
-		# Out of bounds
+        # Out of bounds
         if any(.!isfinite.(cm))
             return -Inf
         end
@@ -103,7 +103,7 @@ function score(m::ProcessMLEModel{T}, par::GaussianParams{T}) where {T<:Abstract
         cpar = covpar(m, par, i1, i2)
 
         # Get the explained covariance matrix for this person.
-		println("par=", par)
+        println("par=", par)
         cm = covmat(cpar, m.time[i1:i2])
         cmi = pinv(cm)
 
@@ -163,19 +163,19 @@ function getstart(m::ProcessMLEModel)
     # OLS for the mean parameters
     u, s, v = svd(m.X.mean)
     pmean = v * diagm(1 ./ s) * u' * m.y
-	fit = m.X.mean * pmean
+    fit = m.X.mean * pmean
 
-	resid = m.y - fit
-	sd = std(resid)
+    resid = m.y - fit
+    sd = std(resid)
 
     pscale = zeros(size(m.X.scale, 2))
     pscale[1] = log(sd)
     psmooth = zeros(size(m.X.smooth, 2))
     punexplained =
         length(m.fix_unexplained) > 0 ? m.fix_unexplained : zeros(size(m.X.unexplained, 2))
-	if length(m.fix_unexplained) == 0
-	    punexplained[1] = log(sd)
-	end
+    if length(m.fix_unexplained) == 0
+        punexplained[1] = log(sd)
+    end
 
     return vcat(pmean, pscale, psmooth, punexplained)
 end
@@ -214,7 +214,7 @@ function _fit!(
         g!,
         start,
         GradientDescent(),
-        Optim.Options(iterations = div(maxiter,2), show_trace = verbose),
+        Optim.Options(iterations = div(maxiter, 2), show_trace = verbose),
     )
 
     r = optimize(
@@ -379,11 +379,11 @@ function covmat(c::GaussianCovPar{T}, time::Vector{T})::Matrix{T} where {T<:Abst
         end
     end
 
-	if any(.!isfinite.(cm))
-		println("sc=", sc)
-		println("sm=", sm)
-		println("ux=", ux)
-	end
+    if any(.!isfinite.(cm))
+        println("sc=", sc)
+        println("sm=", sm)
+        println("ux=", ux)
+    end
 
     for i = 1:m
         cm[i, i] += ux[i]^2

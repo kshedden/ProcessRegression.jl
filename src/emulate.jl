@@ -15,7 +15,7 @@ function genx(N, fix_unexplained, par)
     X_smooth[:, 1] .= 1
     X_unexplained[:, 1] .= 1
 
-	return Xmat(X_mean, X_scale, X_smooth, X_unexplained)
+    return Xmat(X_mean, X_scale, X_smooth, X_unexplained)
 end
 
 function gengrptime(n, m)
@@ -30,7 +30,7 @@ function gengrptime(n, m)
         ii += b
         push!(ti, (2 .* rand(b) .- 1)...)
     end
-	return tuple(ti, grp, ix)
+    return tuple(ti, grp, ix)
 end
 
 #=
@@ -38,26 +38,34 @@ end
 
 Simulate data from a fitted ProcessRegression model.
 =#
-function emulate(par; n = nothing, m = nothing, time = nothing, X = nothing, grp = nothing, fix_unexplained = zeros(0))
+function emulate(
+    par;
+    n = nothing,
+    m = nothing,
+    time = nothing,
+    X = nothing,
+    grp = nothing,
+    fix_unexplained = zeros(0),
+)
 
-	if X == nothing && (n == nothing || m == nothing)
-		error("Either X or both n and m must be specified")
-	end
+    if X == nothing && (n == nothing || m == nothing)
+        error("Either X or both n and m must be specified")
+    end
 
-	# Simulate group and/or time if not provided
-	if grp == nothing || time == nothing
-		tim_, grp_, ix = gengrptime(n, m)
-	else
-	    ix, _ = groupix(grp)
-	end
-	grp = grp == nothing ? grp_ : grp
-	tim = time == nothing ? tim_ : time
+    # Simulate group and/or time if not provided
+    if grp == nothing || time == nothing
+        tim_, grp_, ix = gengrptime(n, m)
+    else
+        ix, _ = groupix(grp)
+    end
+    grp = grp == nothing ? grp_ : grp
+    tim = time == nothing ? tim_ : time
 
     # Total number of observations
     N = length(grp)
 
-	# Simulate the explanatory variables if not provided
-	X = X == nothing ? genx(N, fix_unexplained, par) : X
+    # Simulate the explanatory variables if not provided
+    X = X == nothing ? genx(N, fix_unexplained, par) : X
 
     # Mean values
     y_mean = X.mean * par.mean
@@ -65,13 +73,7 @@ function emulate(par; n = nothing, m = nothing, time = nothing, X = nothing, grp
     # Placeholder
     yy = zeros(Float64, N)
 
-    pm = ProcessMLEModel(
-        yy,
-		X,
-        tim,
-        grp;
-        fix_unexplained = copy(fix_unexplained),
-    )
+    pm = ProcessMLEModel(yy, X, tim, grp; fix_unexplained = copy(fix_unexplained))
 
     # Simulate the response values
     y = copy(y_mean)
