@@ -40,6 +40,15 @@ mutable struct Xmat{T} <: AbstractXmat where {T<:Real}
 
 end
 
+abstract type AbstractPenalty end
+
+mutable struct Penalty{T} <: AbstractPenalty where {T<:Real}
+
+	scale::T
+
+	smooth::T
+end
+
 mutable struct ProcessMLEModel{T} <: ProcessModel where {T<:Real}
 
     # Responses
@@ -66,6 +75,8 @@ mutable struct ProcessMLEModel{T} <: ProcessModel where {T<:Real}
     # If true, fix the unexplained variance terms at their starting values
     fix_unexplained::Vector{T}
 
+	pen::Penalty{T}
+
 end
 
 function ProcessMLEModel(
@@ -85,6 +96,7 @@ function ProcessMLEModel(
         GaussianParams(),
         zeros(0, 0),
         fix_unexplained,
+        Penalty(0., 0.),
     )
 end
 

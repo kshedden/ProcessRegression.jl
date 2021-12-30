@@ -1,6 +1,5 @@
 using ProcessRegression, Test, LinearAlgebra
 
-
 @testset "Check fitting" begin
 
     n = 1000 # Number of groups

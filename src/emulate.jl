@@ -28,8 +28,16 @@ function gengrptime(n, m)
         push!(grp, fill(i, b)...)
         ix[:, i] = [ii, ii + b - 1]
         ii += b
-        push!(ti, (2 .* rand(b) .- 1)...)
+		while true
+			tt = 2 .* rand(b) .- 1
+			sort!(tt)
+			if b == 1 || minimum(diff(tt)) > 0.5 / (b - 1)
+                push!(ti, tt...)
+                break				
+			end
+		end
     end
+
     return tuple(ti, grp, ix)
 end
 

@@ -83,6 +83,9 @@ function loglike(m::ProcessMLEModel{T}, par::GaussianParams{T})::T where {T<:Rea
 
     end
 
+	ll -= m.pen.scale * sum(abs2, par.scale)
+	ll -= m.pen.smooth * sum(abs2, par.smooth)
+
     return ll
 end
 
@@ -103,7 +106,6 @@ function score(m::ProcessMLEModel{T}, par::GaussianParams{T}) where {T<:Abstract
         cpar = covpar(m, par, i1, i2)
 
         # Get the explained covariance matrix for this person.
-        println("par=", par)
         cm = covmat(cpar, m.time[i1:i2])
         cmi = pinv(cm)
 
@@ -139,6 +141,9 @@ function score(m::ProcessMLEModel{T}, par::GaussianParams{T}) where {T<:Abstract
             score_ux .+= sux' * diag(bm)
         end
     end
+
+	score_sc .-= 2 * m.pen.scale * par.scale
+	score_sm .-= 2 * m.pen.smooth * par.smooth
 
     return score_mn, score_sc, score_sm, score_ux
 end
