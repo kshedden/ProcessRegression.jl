@@ -15,8 +15,8 @@ using ProcessRegression, Test, LinearAlgebra
         )
 
         pm = emulate(par; n = n, m = m, fix_unexplained = fix_unexplained)
-		pm.penalty = Penalty(1000, 1000, 1000, 1000)
-        fit!(pm; verbose = true)
+		pm.penalty = Penalty(10, 10, 10, 0)
+        fit!(pm; verbose = false)
         coef(pm)
         println(coeftable(pm))
     end

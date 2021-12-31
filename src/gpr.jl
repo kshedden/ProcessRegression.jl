@@ -147,7 +147,9 @@ function score(m::ProcessMLEModel{T}, par::GaussianParams{T}) where {T<:Abstract
 	score_mn .-= 2 * m.penalty.mean * par.mean
 	score_sc .-= 2 * m.penalty.scale * par.scale
 	score_sm .-= 2 * m.penalty.smooth * par.smooth
-	score_ux .-= 2 * m.penalty.unexplained * par.unexplained
+	if length(m.fix_unexplained) == 0
+		score_ux .-= 2 * m.penalty.unexplained * par.unexplained
+	end
 
     return score_mn, score_sc, score_sm, score_ux
 end
