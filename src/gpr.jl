@@ -83,10 +83,10 @@ function loglike(m::ProcessMLEModel{T}, par::GaussianParams{T})::T where {T<:Rea
 
     end
 
-	ll -= m.penalty.mean * sum(abs2, par.mean)
-	ll -= m.penalty.scale * sum(abs2, par.scale)
-	ll -= m.penalty.smooth * sum(abs2, par.smooth)
-	ll -= m.penalty.unexplained * sum(abs2, par.unexplained)
+    ll -= m.penalty.mean * sum(abs2, par.mean)
+    ll -= m.penalty.scale * sum(abs2, par.scale)
+    ll -= m.penalty.smooth * sum(abs2, par.smooth)
+    ll -= m.penalty.unexplained * sum(abs2, par.unexplained)
 
     return ll
 end
@@ -144,12 +144,12 @@ function score(m::ProcessMLEModel{T}, par::GaussianParams{T}) where {T<:Abstract
         end
     end
 
-	score_mn .-= 2 * m.penalty.mean * par.mean
-	score_sc .-= 2 * m.penalty.scale * par.scale
-	score_sm .-= 2 * m.penalty.smooth * par.smooth
-	if length(m.fix_unexplained) == 0
-		score_ux .-= 2 * m.penalty.unexplained * par.unexplained
-	end
+    score_mn .-= 2 * m.penalty.mean * par.mean
+    score_sc .-= 2 * m.penalty.scale * par.scale
+    score_sm .-= 2 * m.penalty.smooth * par.smooth
+    if length(m.fix_unexplained) == 0
+        score_ux .-= 2 * m.penalty.unexplained * par.unexplained
+    end
 
     return score_mn, score_sc, score_sm, score_ux
 end
@@ -197,7 +197,7 @@ function _fit!(
     maxiter::Int,
     atol::Float64,
     rtol::Float64,
-    start
+    start,
 )
 
     pmn, psc = size(m.X.mean, 2), size(m.X.scale, 2)
@@ -223,7 +223,7 @@ function _fit!(
     r = optimize(
         f,
         g!,
-        start,
+        typeof(start) <: ProcessParams ? pack(start) : start,
         GradientDescent(),
         Optim.Options(iterations = maxiter, show_trace = verbose),
     )
@@ -387,13 +387,13 @@ function covmat(c::GaussianCovPar{T}, time::Vector{T})::Matrix{T} where {T<:Abst
             sca = log(sc[i]) + log(sc[j])
             sma = (log(sm[i]) + log(sm[j])) / 4
             q = dt^2 / sa
-            cm[i, j] = exp(-q / 2 + sca + sma - log(sa)/2)
+            cm[i, j] = exp(-q / 2 + sca + sma - log(sa) / 2)
         end
     end
 
     if any(.!isfinite.(cm))
-    	@warn "Covariance matrix is not finite:"
-    	println("cm=", cm)
+        @warn "Covariance matrix is not finite:"
+        println("cm=", cm)
         println("sc=", sc)
         println("sm=", sm)
         println("ux=", ux)

@@ -14,9 +14,17 @@ using ProcessRegression, Test, LinearAlgebra
             length(fix_unexplained) > 0 ? fix_unexplained : [1.0, 0],
         )
 
+        # Fit once with a penalty
         pm = emulate(par; n = n, m = m, fix_unexplained = fix_unexplained)
-		pm.penalty = Penalty(10, 10, 10, 0)
+        pm.penalty = Penalty(10, 10, 10, 0)
         fit!(pm; verbose = false)
+        coef(pm)
+        println(coeftable(pm))
+
+        # Use the penalized results as starting values
+        # for an unpenalized fit
+        pm.penalty = Penalty(0, 0, 0, 0)
+        fit!(pm; start = pm.params, verbose = false)
         coef(pm)
         println(coeftable(pm))
     end

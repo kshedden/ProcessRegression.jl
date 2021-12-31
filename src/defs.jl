@@ -7,6 +7,10 @@ made at a given set of time points.
 =#
 abstract type ProcessParams end
 
+#=
+GaussianParams are the parameters of a Gaussian parametric process
+model.
+=#
 mutable struct GaussianParams{T} <: ProcessParams where {T<:AbstractFloat}
 
     mean::Vector{T}
@@ -24,6 +28,9 @@ end
 
 abstract type AbstractXmat end
 
+#=
+The design matrices for a process model.
+=#
 mutable struct Xmat{T} <: AbstractXmat where {T<:Real}
 
     # Explanatory variables for the mean
@@ -40,17 +47,24 @@ mutable struct Xmat{T} <: AbstractXmat where {T<:Real}
 
 end
 
+#=
+The L2 penalty parameters for fitting a process model.
+=#
 mutable struct Penalty
 
-	mean::Float64
+    mean::Float64
 
-	scale::Float64
+    scale::Float64
 
-	smooth::Float64
+    smooth::Float64
 
-	unexplained::Float64
+    unexplained::Float64
 end
 
+#=
+A specification of a process regression model to be fit using
+maximum likelihood or L2 penalized maximum likelihood.
+=#
 mutable struct ProcessMLEModel{T} <: ProcessModel where {T<:Real}
 
     # Responses
@@ -77,7 +91,8 @@ mutable struct ProcessMLEModel{T} <: ProcessModel where {T<:Real}
     # If true, fix the unexplained variance terms at their starting values
     fix_unexplained::Vector{T}
 
-	penalty::Penalty
+    # L2 penalty parameters
+    penalty::Penalty
 
 end
 
@@ -87,7 +102,7 @@ function ProcessMLEModel(
     time::AbstractVector,
     grp::AbstractVector;
     fix_unexplained::AbstractVector = zeros(0),
-	penalty = Penalty(0, 0, 0, 0),
+    penalty = Penalty(0, 0, 0, 0),
 )
     gp, _ = groupix(grp)
     return ProcessMLEModel(
@@ -110,6 +125,10 @@ combining the ProcessParams with the covariates.
 =#
 abstract type ProcessCovPar end
 
+#=
+The covariance parameters for a Gaussian parametric process
+regression model.
+=#
 mutable struct GaussianCovPar{T} <: ProcessCovPar where {T<:AbstractFloat}
 
     scale::Vector{T}
