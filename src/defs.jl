@@ -40,13 +40,15 @@ mutable struct Xmat{T} <: AbstractXmat where {T<:Real}
 
 end
 
-abstract type AbstractPenalty end
+mutable struct Penalty
 
-mutable struct Penalty{T} <: AbstractPenalty where {T<:Real}
+	mean::Float64
 
-	scale::T
+	scale::Float64
 
-	smooth::T
+	smooth::Float64
+
+	unexplained::Float64
 end
 
 mutable struct ProcessMLEModel{T} <: ProcessModel where {T<:Real}
@@ -75,7 +77,7 @@ mutable struct ProcessMLEModel{T} <: ProcessModel where {T<:Real}
     # If true, fix the unexplained variance terms at their starting values
     fix_unexplained::Vector{T}
 
-	pen::Penalty{T}
+	penalty::Penalty
 
 end
 
@@ -85,6 +87,7 @@ function ProcessMLEModel(
     time::AbstractVector,
     grp::AbstractVector;
     fix_unexplained::AbstractVector = zeros(0),
+	penalty = Penalty(0, 0, 0, 0),
 )
     gp, _ = groupix(grp)
     return ProcessMLEModel(
@@ -96,7 +99,7 @@ function ProcessMLEModel(
         GaussianParams(),
         zeros(0, 0),
         fix_unexplained,
-        Penalty(0., 0.),
+        penalty,
     )
 end
 

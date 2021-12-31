@@ -83,8 +83,10 @@ function loglike(m::ProcessMLEModel{T}, par::GaussianParams{T})::T where {T<:Rea
 
     end
 
-	ll -= m.pen.scale * sum(abs2, par.scale)
-	ll -= m.pen.smooth * sum(abs2, par.smooth)
+	ll -= m.penalty.mean * sum(abs2, par.mean)
+	ll -= m.penalty.scale * sum(abs2, par.scale)
+	ll -= m.penalty.smooth * sum(abs2, par.smooth)
+	ll -= m.penalty.unexplained * sum(abs2, par.unexplained)
 
     return ll
 end
@@ -116,7 +118,7 @@ function score(m::ProcessMLEModel{T}, par::GaussianParams{T}) where {T<:Abstract
 
         # The derivatives for the scaling parameters.
         rx = resid[i1:i2] * resid[i1:i2]'
-        qm = 0.5 .* (cm \ rx / cm)
+        qm = 0.5 .* (cmi * rx * cmi)
         scx = cpar.scale .* m.X.scale[i1:i2, :]
         for i in eachindex(jsc)
             c1 = 2 * sum(qm[i, :] .* jsc[i]) - qm[i, i] * jsc[i][i]
@@ -137,13 +139,15 @@ function score(m::ProcessMLEModel{T}, par::GaussianParams{T}) where {T<:Abstract
         if length(m.fix_unexplained) == 0
             sux = (cpar.unexplained .^ 2) .* m.X.unexplained[i1:i2, :]
             score_ux .-= sux' * diag(cmi)
-            bm = cm \ rx / cm
+            bm = cmi * rx * cmi
             score_ux .+= sux' * diag(bm)
         end
     end
 
-	score_sc .-= 2 * m.pen.scale * par.scale
-	score_sm .-= 2 * m.pen.smooth * par.smooth
+	score_mn .-= 2 * m.penalty.mean * par.mean
+	score_sc .-= 2 * m.penalty.scale * par.scale
+	score_sm .-= 2 * m.penalty.smooth * par.smooth
+	score_ux .-= 2 * m.penalty.unexplained * par.unexplained
 
     return score_mn, score_sc, score_sm, score_ux
 end
@@ -191,7 +195,7 @@ function _fit!(
     maxiter::Int,
     atol::Float64,
     rtol::Float64,
-    start,
+    start
 )
 
     pmn, psc = size(m.X.mean, 2), size(m.X.scale, 2)
@@ -213,13 +217,13 @@ function _fit!(
         start = getstart(m)
     end
 
-    # Refine starting values
+    # Refine starting values using gradient sescent
     r = optimize(
         f,
         g!,
         start,
         GradientDescent(),
-        Optim.Options(iterations = div(maxiter, 2), show_trace = verbose),
+        Optim.Options(iterations = maxiter, show_trace = verbose),
     )
 
     r = optimize(
@@ -272,6 +276,7 @@ function fit(
     ti::Vector{T},
     grp::AbstractVector;
     dofit::Bool = true,
+    penalty = nothing,
     fitargs...,
 ) where {M<:ProcessModel,T<:Real}
 
@@ -293,7 +298,7 @@ function fit(
         )
     end
 
-    c = ProcessMLEModel(y, X, ti, grp)
+    c = ProcessMLEModel(y, X, ti, grp, penalty)
 
     return dofit ? fit!(c; fitargs...) : c
 end
@@ -377,14 +382,16 @@ function covmat(c::GaussianCovPar{T}, time::Vector{T})::Matrix{T} where {T<:Abst
         for j = 1:m
             dt = time[i] - time[j]
             sa = (sm[i] + sm[j]) / 2
+            sca = log(sc[i]) + log(sc[j])
+            sma = (log(sm[i]) + log(sm[j])) / 4
             q = dt^2 / sa
-            cm[i, j] = exp(-q / 2) / sqrt(sa)
-            cm[i, j] *= (sm[i] * sm[j])^0.25
-            cm[i, j] *= sc[i] * sc[j]
+            cm[i, j] = exp(-q / 2 + sca + sma - log(sa)/2)
         end
     end
 
     if any(.!isfinite.(cm))
+    	@warn "Covariance matrix is not finite:"
+    	println("cm=", cm)
         println("sc=", sc)
         println("sm=", sm)
         println("ux=", ux)
