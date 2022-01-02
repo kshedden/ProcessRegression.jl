@@ -421,6 +421,7 @@ function jac(c::GaussianCovPar{T}, time::Vector{T}) where {T<:AbstractFloat}
     dtt = dt .^ 2
     qmat = dtt ./ sa
     eqm = exp.(-qmat ./ 2)
+    eqmx = exp.(-qmat ./ 2 + 2*log.(abs.(dt)) - log.(sa))
     sm4 = (sm * sm') .^ 0.25
     cmx = eqm .* sm4 ./ sds
 
@@ -429,7 +430,7 @@ function jac(c::GaussianCovPar{T}, time::Vector{T}) where {T<:AbstractFloat}
     for i in eachindex(sm)
         dbottom = 0.25 ./ sds[:, i]
         dbottom[i] *= 2
-        dtop = 0.5 .* eqm[:, i] .* qmat[:, i] ./ (sm .+ sm[i])
+        dtop = 0.5 .* eqmx[:, i] ./ (sm .+ sm[i])
         dtop[i] *= 2
         b = dtop ./ sds[:, i] .- 2 .* eqm[:, i] .* dbottom ./ (sm .+ sm[i])
         c = eqm[:, i] ./ sds[:, i]
