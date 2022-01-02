@@ -357,11 +357,13 @@ end
 # Map the structural model parameters to the specific scale, smooth and unexplained
 # variance parameters for a particular group.
 function covpar(m::ProcessMLEModel, par::GaussianParams, i1::Int, i2::Int)::GaussianCovPar
-    return GaussianCovPar(
-        exp.(m.X.scale[i1:i2, :] * par.scale),
-        exp.(m.X.smooth[i1:i2, :] * par.smooth),
-        exp.(m.X.unexplained[i1:i2, :] * par.unexplained),
-    )
+
+    lsc = m.X.scale[i1:i2, :] * par.scale
+    lsm = m.X.smooth[i1:i2, :] * par.smooth
+    lux = m.X.unexplained[i1:i2, :] * par.unexplained
+
+    gcp = GaussianCovPar(exp.(lsc), lsc, exp.(lsm), lsm, exp.(lux), lux)
+    return gcp
 end
 
 #=
@@ -373,7 +375,8 @@ index `i` and `j` is given by:
 =#
 function covmat(c::GaussianCovPar{T}, time::Vector{T})::Matrix{T} where {T<:AbstractFloat}
 
-    sc, sm, ux = c.scale, c.smooth, c.unexplained
+    sc, lsc, sm, lsm = c.scale, c.lscale, c.smooth, c.lsmooth
+    ux, lux = c.unexplained, c.lunexplained
 
     @assert length(time) == length(sc) == length(sm)
     @assert length(ux) in [0, length(time)]
@@ -384,19 +387,19 @@ function covmat(c::GaussianCovPar{T}, time::Vector{T})::Matrix{T} where {T<:Abst
         for j = 1:m
             dt = time[i] - time[j]
             sa = (sm[i] + sm[j]) / 2
-            sca = log(sc[i]) + log(sc[j])
-            sma = (log(sm[i]) + log(sm[j])) / 4
-            q = dt^2 / sa
-            cm[i, j] = exp(-q / 2 + sca + sma - log(sa) / 2)
-        end
-    end
 
-    if any(.!isfinite.(cm))
-        @warn "Covariance matrix is not finite:"
-        println("cm=", cm)
-        println("sc=", sc)
-        println("sm=", sm)
-        println("ux=", ux)
+            lsm1, lsm2 = if lsm[i] < lsm[j]
+                lsm[i], lsm[j]
+            else
+                lsm[j], lsm[i]
+            end
+            lsa = log1p(exp(lsm1 - lsm2)) - log(2)
+
+            sca = lsc[i] + lsc[j]
+            sma = (lsm1 - lsm2) / 4
+            q = dt^2 / sa
+            cm[i, j] = exp(-q / 2 + sca + sma - lsa / 2)
+        end
     end
 
     for i = 1:m
@@ -426,9 +429,9 @@ function jac(c::GaussianCovPar{T}, time::Vector{T}) where {T<:AbstractFloat}
     for i in eachindex(sm)
         dbottom = 0.25 ./ sds[:, i]
         dbottom[i] *= 2
-        dtop = 0.25 .* eqm[:, i] .* qmat[:, i] ./ sa[:, i]
+        dtop = 0.5 .* eqm[:, i] .* qmat[:, i] ./ (sm .+ sm[i])
         dtop[i] *= 2
-        b = dtop ./ sds[:, i] .- eqm[:, i] .* dbottom ./ sa[:, i]
+        b = dtop ./ sds[:, i] .- 2 .* eqm[:, i] .* dbottom ./ (sm .+ sm[i])
         c = eqm[:, i] ./ sds[:, i]
         fi = 0.25 .* sm .^ 0.25 ./ sm[i] .^ 0.75
         fi[i] = 0.5 ./ sm[i] .^ 0.5

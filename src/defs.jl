@@ -132,8 +132,12 @@ regression model.
 mutable struct GaussianCovPar{T} <: ProcessCovPar where {T<:AbstractFloat}
 
     scale::Vector{T}
+    lscale::Vector{T}
 
     smooth::Vector{T}
+    lsmooth::Vector{T}
 
     unexplained::Vector{T}
+    lunexplained::Vector{T}
+
 end

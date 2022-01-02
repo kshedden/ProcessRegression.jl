@@ -99,7 +99,7 @@ end
     ux = [0.0, 0, 0, 0]
 
     # Covariance matrix and Jacobian at the given time points
-    c = GaussianCovPar(sc, sm, ux)
+    c = GaussianCovPar(sc, log.(sc), sm, log.(sm), ux, log.(ux))
     cc = covmat(c, ti)
     jsc, jsm = jac(c, ti)
 
@@ -113,7 +113,7 @@ end
         ee = 1e-5
         sc1 = copy(sc)
         sc1[i] += ee
-        c1 = GaussianCovPar(sc1, sm, ux)
+        c1 = GaussianCovPar(sc1, log.(sc1), sm, log.(sm), ux, log.(ux))
         cc1 = covmat(c1, ti)
         d = (cc1 .- cc) ./ ee
         @test isapprox(d[:, i], jsc[i], rtol = 1e-5, atol = 1e-5)
@@ -122,7 +122,7 @@ end
         ee = 1e-5
         sm1 = copy(sm)
         sm1[i] += ee
-        c1 = GaussianCovPar(sc, sm1, ux)
+        c1 = GaussianCovPar(sc, log.(sc), sm1, log.(sm1), ux, log.(ux))
         cc1 = covmat(c1, ti)
         d = (cc1 .- cc) ./ ee
         @test isapprox(d[:, i], jsm[i], rtol = 1e-5, atol = 1e-5)
