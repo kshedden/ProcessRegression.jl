@@ -109,12 +109,15 @@ function score(m::ProcessMLEModel{T}, par::GaussianParams{T}) where {T<:Abstract
 
         # Get the explained covariance matrix for this person.
         cm = covmat(cpar, m.time[i1:i2])
+        if any(.!isfinite.(cm))
+            return 0 .* score_mn, 0 .* score_sc, 0 .* score_sm, 0 .* score_ux
+        end
         cmi = pinv(cm)
 
         jsc, jsm = jac(cpar, m.time[i1:i2])
 
         # The derivatives for the mean parameters.
-        score_mn .+= m.X.mean[i1:i2, :]' * (cm \ resid[i1:i2])
+        score_mn .+= m.X.mean[i1:i2, :]' * (cmi * resid[i1:i2])
 
         # The derivatives for the scaling parameters.
         rx = resid[i1:i2] * resid[i1:i2]'
@@ -197,7 +200,10 @@ function _fit!(
     maxiter::Int,
     atol::Float64,
     rtol::Float64,
-    start,
+    start;
+    maxiter_gd = 20,
+    algorithm = LBFGS(),
+    g_tol = 1e-8,
 )
 
     pmn, psc = size(m.X.mean, 2), size(m.X.scale, 2)
@@ -225,15 +231,15 @@ function _fit!(
         g!,
         typeof(start) <: ProcessParams ? pack(start) : start,
         GradientDescent(),
-        Optim.Options(iterations = maxiter, show_trace = verbose),
+        Optim.Options(iterations = maxiter_gd, show_trace = verbose),
     )
 
     r = optimize(
         f,
         g!,
         Optim.minimizer(r),
-        LBFGS(),
-        Optim.Options(iterations = maxiter, show_trace = verbose),
+        algorithm,
+        Optim.Options(iterations = maxiter, show_trace = verbose, g_tol = g_tol),
     )
 
     if !Optim.converged(r)
@@ -268,7 +274,7 @@ function StatsBase.fit!(
     start = nothing,
     kwargs...,
 )
-    _fit!(m, verbose, maxiter, atol, rtol, start)
+    _fit!(m, verbose, maxiter, atol, rtol, start; kwargs...)
 end
 
 function fit(
@@ -362,7 +368,7 @@ function covpar(m::ProcessMLEModel, par::GaussianParams, i1::Int, i2::Int)::Gaus
     lsm = m.X.smooth[i1:i2, :] * par.smooth
     lux = m.X.unexplained[i1:i2, :] * par.unexplained
 
-    gcp = GaussianCovPar(exp.(lsc), lsc, exp.(lsm), lsm, exp.(lux), lux)
+    gcp = GaussianCovPar(lsc, lsm, lux)
     return gcp
 end
 
@@ -421,7 +427,7 @@ function jac(c::GaussianCovPar{T}, time::Vector{T}) where {T<:AbstractFloat}
     dtt = dt .^ 2
     qmat = dtt ./ sa
     eqm = exp.(-qmat ./ 2)
-    eqmx = exp.(-qmat ./ 2 + 2*log.(abs.(dt)) - log.(sa))
+    eqmx = exp.(-qmat ./ 2 + 2 * log.(abs.(dt)) - log.(sa))
     sm4 = (sm * sm') .^ 0.25
     cmx = eqm .* sm4 ./ sds
 

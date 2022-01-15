@@ -141,3 +141,22 @@ mutable struct GaussianCovPar{T} <: ProcessCovPar where {T<:AbstractFloat}
     lunexplained::Vector{T}
 
 end
+
+#=
+A constructor for GaussianCovPar that takes the linear predictors for
+the three types of parameters.
+=#
+function GaussianCovPar(
+    lscale::Vector{T},
+    lsmooth::Vector{T},
+    lunexplained::Vector{T},
+) where {T<:AbstractFloat}
+    return GaussianCovPar(
+        exp.(lscale),
+        lscale,
+        exp.(lsmooth),
+        lsmooth,
+        exp.(lunexplained),
+        lunexplained,
+    )
+end
