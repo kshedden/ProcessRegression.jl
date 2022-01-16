@@ -25,6 +25,104 @@ function get_basis(nb, age, scale)
     return xb
 end
 
+@testset "Check likelihood gradient using numerical derivatives" begin
+
+    par = GaussianParams([1.0, -1.5], [2.0, 0.0], [1.5, 0.0], [1.0, 0])
+
+    n = 1000 # Number of groups
+    m = 5    # Average number of observations per group
+
+    ti = range(0, 1, length = m)
+    tim = kron(ones(n), ti)
+    x = zeros(n * m, 2)
+    x[:, 1] .= 1
+    x[:, 2] = tim
+    X = Xmat(x, x, x, x)
+    grp = kron(1:n, ones(m))
+    pm = ProcessMLEModel(zeros(0), X, tim, grp; standardize = false)
+    y = emulate(pm; par = par)
+    pm = ProcessMLEModel(y, X, tim, grp; standardize = false)
+
+    ll = loglike(pm, par)
+    score_mn, score_sc, score_sm, score_ux = score(pm, par)
+
+    # Check the score for mean parameters
+    ee = 1e-7
+    nscore_mn = zeros(length(score_mn))
+    for j in eachindex(score_mn)
+        par1 = deepcopy(par)
+        par1.mean[j] += ee
+        ll1 = loglike(pm, par1)
+        nscore_mn[j] = (ll1 - ll) / ee
+    end
+    @test isapprox(nscore_mn, score_mn, rtol = 1e-4, atol = 1e-4)
+
+    # Check the score for scale parameters
+    ee = 1e-6
+    nscore_sc = zeros(length(score_sc))
+    for j in eachindex(score_sc)
+        par1 = deepcopy(par)
+        par1.scale[j] += ee
+        ll1 = loglike(pm, par1)
+        nscore_sc[j] = (ll1 - ll) / ee
+    end
+    @test isapprox(nscore_sc, score_sc, rtol = 1e-3, atol = 1e-3)
+
+    # Check the score for smoothing parameters
+    ee = 1e-6
+    nscore_sm = zeros(length(score_sm))
+    for j in eachindex(score_sm)
+        par1 = deepcopy(par)
+        par1.smooth[j] += ee
+        ll1 = loglike(pm, par1)
+        nscore_sm[j] = (ll1 - ll) / ee
+    end
+    @test isapprox(nscore_sm, score_sm, rtol = 1e-4, atol = 1e-4)
+
+    # Check the score for the unexplained variance parameters
+    ee = 1e-7
+    nscore_ux = zeros(length(score_ux))
+    for j in eachindex(score_ux)
+        par1 = deepcopy(par)
+        par1.unexplained[j] += ee
+        ll1 = loglike(pm, par1)
+        nscore_ux[j] = (ll1 - ll) / ee
+    end
+    @test isapprox(nscore_ux, score_ux, rtol = 1e-4, atol = 1e-4)
+
+end
+
+@testset "Check emulate" begin
+
+    Random.seed!(123)
+
+    n = 1000 # Number of groups
+    m = 5    # Average number of observations per group
+
+    par = GaussianParams([1.0, 0.0], [1.0, -1.5], [0.0, 0.0], [1.5, 0.0])
+
+    ti = range(0, 1, length = m)
+    tim = kron(ones(n), ti)
+    x = zeros(n * m, 2)
+    x[:, 1] .= 1
+    x[:, 2] = tim
+    X = Xmat(x, x, x, x)
+    grp = kron(1:n, ones(m))
+    pm = ProcessMLEModel(zeros(0), X, tim, grp; standardize = false)
+    y = emulate(pm; par = par)
+    f = 1.0
+    pen = Penalty(zeros(0, 0), zeros(0, 0), Diagonal([f, f]), zeros(0, 0))
+    pm1 = ProcessMLEModel(y, X, tim, grp; penalty = pen)
+    fit!(pm1)
+
+    # Regression tests
+    par1 = pm1.params
+    @test isapprox(par1.mean, [1.18, -0.31], rtol = 1e-2, atol = 1e-2)
+    @test isapprox(par1.scale, [0.95, -1.52], rtol = 1e-2, atol = 1e-2)
+    @test isapprox(par1.smooth, [0.29, 0.07], rtol = 1e-2, atol = 1e-2)
+    @test isapprox(par1.unexplained, [1.52, -0.01], rtol = 1e-2, atol = 1e-2)
+end
+
 @testset "Check fitting (regularized)" begin
 
     Random.seed!(123)
@@ -137,104 +235,6 @@ end
     cmd = cm - cm1
     @test maximum(abs.(cmd)) < 0.1
     @test maximum(abs.(cmd ./ cm)) < 0.1
-end
-
-@testset "Check emulate" begin
-
-    n = 1000 # Number of groups
-    m = 5    # Average number of observations per group
-
-    for fix_unexplained in [zeros(0), [0.1]]
-
-        par = GaussianParams(
-            [1.0, -1.5],
-            [2.0, 0.0],
-            [1.5, 0.0],
-            length(fix_unexplained) > 0 ? fix_unexplained : [1.0, 0],
-        )
-
-        # Fit once with a penalty
-        pm = emulate(par; n = n, m = m, fix_unexplained = fix_unexplained)
-        pm.penalty = Penalty(
-            Diagonal([10.0, 10]),
-            Diagonal([10.0, 10]),
-            Diagonal([10.0, 10]),
-            Diagonal([0.0, 0]),
-        )
-        fit!(pm; verbose = false, maxiter_gd = 100)
-        coef(pm)
-        println(coeftable(pm))
-
-        # Use the penalized results as starting values
-        # for an unpenalized fit
-        pm.penalty = Penalty(
-            Diagonal([0.0, 0]),
-            Diagonal([0.0, 0]),
-            Diagonal([0.0, 0]),
-            Diagonal([0.0, 0]),
-        )
-        fit!(pm; start = pm.params, verbose = false, maxiter_gd = 100)
-        coef(pm)
-        println(coeftable(pm))
-    end
-end
-
-@testset "Check likelihood gradient using numerical derivatives" begin
-
-    par = GaussianParams([1.0, -1.5], [2.0, 0.0], [1.5, 0.0], [1.0, 0])
-
-    n = 1000 # Number of groups
-    m = 5    # Average number of observations per group
-
-    pm = emulate(par; n = n, m = m)
-
-    ll = loglike(pm, par)
-    score_mn, score_sc, score_sm, score_ux = score(pm, par)
-
-    # Check the score for mean parameters
-    ee = 1e-7
-    nscore_mn = zeros(length(score_mn))
-    for j in eachindex(score_mn)
-        par1 = deepcopy(par)
-        par1.mean[j] += ee
-        ll1 = loglike(pm, par1)
-        nscore_mn[j] = (ll1 - ll) / ee
-    end
-    @test isapprox(nscore_mn, score_mn, rtol = 1e-4, atol = 1e-4)
-
-    # Check the score for scale parameters
-    ee = 1e-6
-    nscore_sc = zeros(length(score_sc))
-    for j in eachindex(score_sc)
-        par1 = deepcopy(par)
-        par1.scale[j] += ee
-        ll1 = loglike(pm, par1)
-        nscore_sc[j] = (ll1 - ll) / ee
-    end
-    @test isapprox(nscore_sc, score_sc, rtol = 1e-3, atol = 1e-3)
-
-    # Check the score for smoothing parameters
-    ee = 1e-6
-    nscore_sm = zeros(length(score_sm))
-    for j in eachindex(score_sm)
-        par1 = deepcopy(par)
-        par1.smooth[j] += ee
-        ll1 = loglike(pm, par1)
-        nscore_sm[j] = (ll1 - ll) / ee
-    end
-    @test isapprox(nscore_sm, score_sm, rtol = 1e-4, atol = 1e-4)
-
-    # Check the score for the unexplained variance parameters
-    ee = 1e-7
-    nscore_ux = zeros(length(score_ux))
-    for j in eachindex(score_ux)
-        par1 = deepcopy(par)
-        par1.unexplained[j] += ee
-        ll1 = loglike(pm, par1)
-        nscore_ux[j] = (ll1 - ll) / ee
-    end
-    @test isapprox(nscore_ux, score_ux, rtol = 1e-4, atol = 1e-4)
-
 end
 
 @testset "Check covariance gradient" begin

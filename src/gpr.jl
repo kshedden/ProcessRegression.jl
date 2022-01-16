@@ -208,7 +208,7 @@ function getstart(m::ProcessMLEModel)
     return vcat(pmean, pscale, psmooth, punexplained)
 end
 
-function revert_standardize(m::ProcessMLEModel)
+function revert_standardize(m::ProcessMLEModel, skip_se::Bool)
     # Revert the standardization in the parameters
     m.params.mean .*= m.ymom[2]
     m.params.mean[1] += m.ymom[1]
@@ -218,8 +218,13 @@ function revert_standardize(m::ProcessMLEModel)
     end
 
     # Revert the standardization in the standard errors
-    pmn = size(m.X.mean, 2)
-    m.params_cov[1:pmn, 1:pmn] .*= m.ymom[2]^2
+    if !skip_se
+        pmn = size(m.X.mean, 2)
+        m.params_cov[1:pmn, 1:pmn] .*= m.ymom[2]^2
+    end
+
+    # Return the outcome to its original scale
+    m.y = m.y * m.ymom[2] .+ m.ymom[1]
 end
 
 function _fit!(
@@ -232,6 +237,7 @@ function _fit!(
     maxiter_gd = 20,
     algorithm = LBFGS(),
     g_tol = 1e-8,
+    skip_se = false,
 )
 
     pmn, psc = size(m.X.mean, 2), size(m.X.scale, 2)
@@ -278,21 +284,23 @@ function _fit!(
     m.params = unpack(m, b)
 
     # Use numerical differentiation to get the Hessian.
-    score1 = function (x)
-        g = zeros(length(x))
-        score_mn, score_sc, score_sm, score_ux = score(m, unpack(m, x))
-        return vcat(score_mn, score_sc, score_sm, score_ux)
+    if !skip_se
+        score1 = function (x)
+            g = zeros(length(x))
+            score_mn, score_sc, score_sm, score_ux = score(m, unpack(m, x))
+            return vcat(score_mn, score_sc, score_sm, score_ux)
+        end
+        hess = jacobian(central_fdm(12, 1), score1, b)[1]
+        hess = Symmetric(-(hess + hess') ./ 2)
+        if length(m.fix_unexplained) > 0
+            q = size(hess, 1) - length(m.fix_unexplained)
+            hess = hess[1:q, 1:q]
+        end
+        m.params_cov = inv(hess)
     end
-    hess = jacobian(central_fdm(12, 1), score1, b)[1]
-    hess = Symmetric(-(hess + hess') ./ 2)
-    if length(m.fix_unexplained) > 0
-        q = size(hess, 1) - length(m.fix_unexplained)
-        hess = hess[1:q, 1:q]
-    end
-    m.params_cov = inv(hess)
 
     if length(m.ymom) == 2
-        revert_standardize(m)
+        revert_standardize(m, skip_se)
     end
 end
 

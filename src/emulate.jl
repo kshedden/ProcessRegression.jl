@@ -46,64 +46,19 @@ end
 
 Simulate data from a fitted ProcessRegression model.
 =#
-function emulate(
-    par;
-    n = nothing,
-    m = nothing,
-    time = nothing,
-    X = nothing,
-    grp = nothing,
-    fix_unexplained = zeros(0),
-)
-
-    if X == nothing && (n == nothing || m == nothing)
-        error("Either X or both n and m must be specified")
-    end
-
-    # Simulate group and/or time if not provided
-    if grp == nothing || time == nothing
-        tim_, grp_, ix = gengrptime(n, m)
-    else
-        ix, _ = groupix(grp)
-    end
-    grp = grp == nothing ? grp_ : grp
-    tim = time == nothing ? tim_ : time
-
-    # Total number of observations
-    N = length(grp)
-
-    # Simulate the explanatory variables if not provided
-    X = X == nothing ? genx(N, fix_unexplained, par) : X
-
-    # Mean values
-    y_mean = X.mean * par.mean
-
-    # Placeholder
-    yy = zeros(0)
-
-    pm = ProcessMLEModel(
-        yy,
-        X,
-        tim,
-        grp;
-        fix_unexplained = copy(fix_unexplained),
-        standardize = false,
-    )
+function emulate(pm::ProcessMLEModel; par = nothing)
+    par = isnothing(par) ? pm.params : par
+    y_mean = pm.X.mean * par.mean
+    grp = pm.grp
 
     # Simulate the response values
     y = copy(y_mean)
-    for (i1, i2) in eachcol(ix)
+    for (i1, i2) in eachcol(grp)
         cpar = covpar(pm, par, i1, i2)
-        cm = covmat(cpar, tim[i1:i2])
+        cm = covmat(cpar, pm.time[i1:i2])
         cr = cholesky(cm)
         y[i1:i2] .+= cr.U' * randn(i2 - i1 + 1)
     end
 
-    # Replace with the actual (standardized) values
-    ymom = [mean(y), std(y)]
-    y = (y .- ymom[1]) / ymom[2]
-    pm.y = y
-    pm.ymom = ymom
-
-    return pm
+    return y
 end
