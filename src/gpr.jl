@@ -83,10 +83,18 @@ function loglike(m::ProcessMLEModel{T}, par::GaussianParams{T})::T where {T<:Rea
 
     end
 
-    ll -= m.penalty.mean * sum(abs2, par.mean)
-    ll -= m.penalty.scale * sum(abs2, par.scale)
-    ll -= m.penalty.smooth * sum(abs2, par.smooth)
-    ll -= m.penalty.unexplained * sum(abs2, par.unexplained)
+    if size(m.penalty.mean, 1) > 0
+        ll -= par.mean' * m.penalty.mean * par.mean
+    end
+    if size(m.penalty.scale, 1) > 0
+        ll -= par.scale' * m.penalty.scale * par.scale
+    end
+    if size(m.penalty.smooth, 1) > 0
+        ll -= par.smooth' * m.penalty.smooth * par.smooth
+    end
+    if size(m.penalty.unexplained, 1) > 0 && length(m.fix_unexplained) == 0
+        ll -= par.unexplained' * m.penalty.unexplained * par.unexplained
+    end
 
     return ll
 end
@@ -147,10 +155,16 @@ function score(m::ProcessMLEModel{T}, par::GaussianParams{T}) where {T<:Abstract
         end
     end
 
-    score_mn .-= 2 * m.penalty.mean * par.mean
-    score_sc .-= 2 * m.penalty.scale * par.scale
-    score_sm .-= 2 * m.penalty.smooth * par.smooth
-    if length(m.fix_unexplained) == 0
+    if size(m.penalty.mean, 1) > 0
+        score_mn .-= 2 * m.penalty.mean * par.mean
+    end
+    if size(m.penalty.scale, 1) > 0
+        score_sc .-= 2 * m.penalty.scale * par.scale
+    end
+    if size(m.penalty.smooth, 1) > 0
+        score_sm .-= 2 * m.penalty.smooth * par.smooth
+    end
+    if size(m.penalty.unexplained, 1) > 0 && length(m.fix_unexplained) == 0
         score_ux .-= 2 * m.penalty.unexplained * par.unexplained
     end
 
@@ -192,6 +206,20 @@ function getstart(m::ProcessMLEModel)
     end
 
     return vcat(pmean, pscale, psmooth, punexplained)
+end
+
+function revert_standardize(m::ProcessMLEModel)
+    # Revert the standardization in the parameters
+    m.params.mean .*= m.ymom[2]
+    m.params.mean[1] += m.ymom[1]
+    m.params.scale[1] += log(m.ymom[2])
+    if length(m.fix_unexplained) == 0
+        m.params.unexplained[1] += log(m.ymom[2])
+    end
+
+    # Revert the standardization in the standard errors
+    pmn = size(m.X.mean, 2)
+    m.params_cov[1:pmn, 1:pmn] .*= m.ymom[2]^2
 end
 
 function _fit!(
@@ -263,6 +291,9 @@ function _fit!(
     end
     m.params_cov = inv(hess)
 
+    if length(m.ymom) == 2
+        revert_standardize(m)
+    end
 end
 
 function StatsBase.fit!(
@@ -394,6 +425,7 @@ function covmat(c::GaussianCovPar{T}, time::Vector{T})::Matrix{T} where {T<:Abst
             dt = time[i] - time[j]
             sa = (sm[i] + sm[j]) / 2
 
+            # Minimum and maximum of the log smoothing parameters
             lsm1, lsm2 = if lsm[i] < lsm[j]
                 lsm[i], lsm[j]
             else

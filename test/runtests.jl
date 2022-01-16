@@ -1,6 +1,145 @@
-using ProcessRegression, Test, LinearAlgebra
+using ProcessRegression, Test, LinearAlgebra, Random, Statistics
 
-@testset "Check fitting" begin
+function armat(ti)
+    m = length(ti)
+    cm = zeros(m, m)
+    for i = 1:m
+        for j = 1:m
+            d = ti[i] - ti[j]
+            cm[i, j] = exp(-d^2 / 2)
+        end
+        cm[i, i] += 1
+    end
+    return cm
+end
+
+function get_basis(nb, age, scale)
+    xb = ones(length(age), nb)
+    age1 = minimum(age)
+    age2 = maximum(age)
+    for (j, v) in enumerate(range(age1, age2, length = nb - 1))
+        u = (age .- v) ./ scale
+        v = exp.(-u .^ 2 ./ 2)
+        xb[:, j+1] = v .- mean(v)
+    end
+    return xb
+end
+
+@testset "Check fitting (regularized)" begin
+
+    Random.seed!(123)
+
+    n = 1000     # Number of groups
+    m = 5        # Number of observations per group
+    nb = 5       # Number of basis functions for the mean structure
+    bscale = 0.5 # Scale for basis functions
+
+    # Population covariance matrix
+    ti = collect(range(0, 1, length = m))
+    cm = armat(ti)
+    cmr = cholesky(cm)
+
+    tim = kron(ones(n), ti)
+    xb = get_basis(nb, tim, bscale)
+    xa = ones(length(tim), 2)
+    xa[:, 2] = tim
+    X = Xmat(xb, xa, xa, xa)
+    grp = kron((1:n), ones(m))
+
+    # The mean structure
+    ey = 0.4 * tim + (tim .- 0.5) .^ 2
+
+    # Generate the response
+    y = copy(ey)
+    ii = 0
+    for i = 1:n
+        y[ii+1:ii+m] .+= cmr.L * randn(m)
+        ii += m
+    end
+
+    # Squared second derivative penalty
+    a = collect(range(0, 1, length = 100))
+    f2 = zeros(98, 100)
+    for i = 1:98
+        f2[i, i:i+2] = [1, -2, 1]
+    end
+    p0 = f2 * get_basis(nb, a, bscale)
+    p0 = p0' * p0
+
+    # Check that the fitted mean becomes smoother as the penalty
+    # is strengthened
+    d2a = []
+    for f in [0, 1e3, 1e6]
+        pen = Penalty(f * p0, zeros(0, 0), zeros(0, 0), zeros(0, 0))
+        pm = ProcessMLEModel(y, X, tim, grp; penalty = pen)
+        fit!(pm; verbose = false)
+
+        yhat = get_basis(nb, a, bscale) * pm.params.mean
+        d2 = diff(diff(yhat))
+        push!(d2a, sum(abs2, d2))
+    end
+
+    @test maximum(diff(d2a)) < 0
+end
+
+@testset "Check fitting (simple)" begin
+
+    Random.seed!(123)
+
+    n = 1000 # Number of groups
+    m = 5    # Average number of observations per group
+
+    # Population covariance matrix
+    ti = collect(range(0, 1, length = m))
+    cm = armat(ti)
+    cmr = cholesky(cm)
+
+    x = zeros(n * m, 2)
+    x[:, 1] .= 1
+    x[:, 2] = kron(ones(n), ti)
+    X = Xmat(x, x, x, x)
+
+    tim = kron(ones(n), ti)
+    grp = kron((1:n), ones(m))
+
+    # The mean structure
+    ey = x * [1, -1]
+
+    # Generate the response
+    y = copy(ey)
+    ii = 0
+    for i = 1:n
+        y[ii+1:ii+m] .+= cmr.L * randn(m)
+        ii += m
+    end
+
+    pm1 = ProcessMLEModel(y, X, tim, grp; standardize = false)
+    fit!(pm1; verbose = false)
+
+    pm2 = ProcessMLEModel(y, X, tim, grp; standardize = true)
+    fit!(pm2; verbose = false)
+
+    par1 = pm1.params
+    par2 = pm2.params
+
+    @test isapprox(par1.mean, par2.mean)
+    @test isapprox(par1.scale, par2.scale)
+    @test isapprox(par1.smooth, par2.smooth)
+    @test isapprox(par1.unexplained, par2.unexplained)
+
+    @test isapprox(coef(pm1), coef(pm2), rtol = 1e-5, atol = 1e-5)
+    @test isapprox(vcov(pm1), vcov(pm2), rtol = 1e-3, atol = 1e-3)
+
+    x0 = ones(m, 2)
+    x0[:, 2] = ti
+    cpar = GaussianCovPar(x0 * par2.scale, x0 * par2.smooth, x0 * par2.unexplained)
+    cm1 = covmat(cpar, x0[:, 2])
+    cmd = cm - cm1
+    @test maximum(abs.(cmd)) < 0.1
+    @test maximum(abs.(cmd ./ cm)) < 0.1
+end
+
+@testset "Check emulate" begin
 
     n = 1000 # Number of groups
     m = 5    # Average number of observations per group
@@ -16,14 +155,24 @@ using ProcessRegression, Test, LinearAlgebra
 
         # Fit once with a penalty
         pm = emulate(par; n = n, m = m, fix_unexplained = fix_unexplained)
-        pm.penalty = Penalty(10, 10, 10, 0)
+        pm.penalty = Penalty(
+            Diagonal([10.0, 10]),
+            Diagonal([10.0, 10]),
+            Diagonal([10.0, 10]),
+            Diagonal([0.0, 0]),
+        )
         fit!(pm; verbose = false, maxiter_gd = 100)
         coef(pm)
         println(coeftable(pm))
 
         # Use the penalized results as starting values
         # for an unpenalized fit
-        pm.penalty = Penalty(0, 0, 0, 0)
+        pm.penalty = Penalty(
+            Diagonal([0.0, 0]),
+            Diagonal([0.0, 0]),
+            Diagonal([0.0, 0]),
+            Diagonal([0.0, 0]),
+        )
         fit!(pm; start = pm.params, verbose = false, maxiter_gd = 100)
         coef(pm)
         println(coeftable(pm))

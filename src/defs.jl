@@ -52,13 +52,13 @@ The L2 penalty parameters for fitting a process model.
 =#
 mutable struct Penalty
 
-    mean::Float64
+    mean::AbstractMatrix{Float64}
 
-    scale::Float64
+    scale::AbstractMatrix{Float64}
 
-    smooth::Float64
+    smooth::AbstractMatrix{Float64}
 
-    unexplained::Float64
+    unexplained::AbstractMatrix{Float64}
 end
 
 #=
@@ -94,6 +94,10 @@ mutable struct ProcessMLEModel{T} <: ProcessModel where {T<:Real}
     # L2 penalty parameters
     penalty::Penalty
 
+    # The marginal moments of the dependent variable, used for standardization,
+    # which improves numerical performance. If ymom is an empty list, the dependent 
+    # variable was not standardized.
+    ymom::Vector{T}
 end
 
 function ProcessMLEModel(
@@ -102,9 +106,26 @@ function ProcessMLEModel(
     time::AbstractVector,
     grp::AbstractVector;
     fix_unexplained::AbstractVector = zeros(0),
-    penalty = Penalty(0, 0, 0, 0),
+    penalty = Penalty(zeros(0, 0), zeros(0, 0), zeros(0, 0), zeros(0, 0)),
+    standardize::Bool = true,
 )
     gp, _ = groupix(grp)
+
+    # Standardize y and save the marginal moments so we can map
+    # everything back to the original scale.
+    if standardize
+        if any(X.mean[:, 1] .!= 1) || any(X.scale[:, 1] .!= 1)
+            error("Design matrices must begin with an intercept")
+        end
+        if length(fix_unexplained) > 0 && any(X.unexplained[:, 1] .!= 1)
+            error("Design matrices must begin with an intercept")
+        end
+        ymom = [mean(y), std(y)]
+        y = (y .- ymom[1]) / ymom[2]
+    else
+        ymom = Float64[]
+    end
+
     return ProcessMLEModel(
         y,
         X,
@@ -115,6 +136,7 @@ function ProcessMLEModel(
         zeros(0, 0),
         fix_unexplained,
         penalty,
+        ymom,
     )
 end
 

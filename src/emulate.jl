@@ -79,9 +79,16 @@ function emulate(
     y_mean = X.mean * par.mean
 
     # Placeholder
-    yy = zeros(Float64, N)
+    yy = zeros(0)
 
-    pm = ProcessMLEModel(yy, X, tim, grp; fix_unexplained = copy(fix_unexplained))
+    pm = ProcessMLEModel(
+        yy,
+        X,
+        tim,
+        grp;
+        fix_unexplained = copy(fix_unexplained),
+        standardize = false,
+    )
 
     # Simulate the response values
     y = copy(y_mean)
@@ -92,8 +99,11 @@ function emulate(
         y[i1:i2] .+= cr.U' * randn(i2 - i1 + 1)
     end
 
-    # Replace with the actual values
+    # Replace with the actual (standardized) values
+    ymom = [mean(y), std(y)]
+    y = (y .- ymom[1]) / ymom[2]
     pm.y = y
+    pm.ymom = ymom
 
     return pm
 end
