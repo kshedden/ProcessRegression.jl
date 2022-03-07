@@ -351,7 +351,13 @@ function fit(
 end
 
 function vcov(m::ProcessModel)
-    return m.params_cov
+    if size(m.params_cov, 1) > 0
+        return m.params_cov
+    else
+        # The model was fit with skip_se == true
+        p = length(coef(m))
+        return zeros(p, p)
+    end
 end
 
 function getnames(m::ProcessModel)::Vector{String}
@@ -390,7 +396,7 @@ function coeftable(m::ProcessModel; level::Real = 0.95)
     p = 2 * ccdf.(Ref(Normal()), abs.(zz))
     ci = se * quantile(Normal(), (1 - level) / 2)
     levstr = isinteger(level * 100) ? string(Integer(level * 100)) : string(level * 100)
-    CoefTable(
+    return CoefTable(
         hcat(cc, se, zz, p, cc + ci, cc - ci),
         ["Coef.", "Std. Error", "z", "Pr(>|z|)", "Lower $levstr%", "Upper $levstr%"],
         getnames(m),

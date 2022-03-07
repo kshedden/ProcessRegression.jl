@@ -1,4 +1,4 @@
-using ProcessRegression, Test, LinearAlgebra, Random, Statistics
+using ProcessRegression, Test, LinearAlgebra, StableRNGs, Statistics
 
 function armat(ti)
     m = length(ti)
@@ -27,6 +27,8 @@ end
 
 @testset "Check likelihood gradient using numerical derivatives" begin
 
+    rng = StableRNG(123)
+
     par = GaussianParams([1.0, -1.5], [2.0, 0.0], [1.5, 0.0], [1.0, 0])
 
     n = 1000 # Number of groups
@@ -40,7 +42,7 @@ end
     X = Xmat(x, x, x, x)
     grp = kron(1:n, ones(m))
     pm = ProcessMLEModel(zeros(0), X, tim, grp; standardize = false)
-    y = emulate(pm; par = par)
+    y = emulate(pm; par = par, rng = rng)
     pm = ProcessMLEModel(y, X, tim, grp; standardize = false)
 
     ll = loglike(pm, par)
@@ -89,12 +91,11 @@ end
         nscore_ux[j] = (ll1 - ll) / ee
     end
     @test isapprox(nscore_ux, score_ux, rtol = 1e-4, atol = 1e-4)
-
 end
 
 @testset "Check emulate" begin
 
-    Random.seed!(123)
+    rng = StableRNG(123)
 
     n = 1000 # Number of groups
     m = 5    # Average number of observations per group
@@ -109,7 +110,7 @@ end
     X = Xmat(x, x, x, x)
     grp = kron(1:n, ones(m))
     pm = ProcessMLEModel(zeros(0), X, tim, grp; standardize = false)
-    y = emulate(pm; par = par)
+    y = emulate(pm; par = par, rng = rng)
     f = 1.0
     pen = Penalty(zeros(0, 0), zeros(0, 0), Diagonal([f, f]), zeros(0, 0))
     pm1 = ProcessMLEModel(y, X, tim, grp; penalty = pen)
@@ -117,15 +118,15 @@ end
 
     # Regression tests
     par1 = pm1.params
-    @test isapprox(par1.mean, [1.18, -0.31], rtol = 1e-2, atol = 1e-2)
-    @test isapprox(par1.scale, [0.95, -1.52], rtol = 1e-2, atol = 1e-2)
-    @test isapprox(par1.smooth, [0.29, 0.07], rtol = 1e-2, atol = 1e-2)
-    @test isapprox(par1.unexplained, [1.52, -0.01], rtol = 1e-2, atol = 1e-2)
+    @test isapprox(par1.mean, [0.89, 0.25], rtol = 1e-2, atol = 1e-2)
+    @test isapprox(par1.scale, [1.01, -1.52], rtol = 1e-2, atol = 1e-2)
+    @test isapprox(par1.smooth, [0.06, 0.01], rtol = 1e-2, atol = 1e-2)
+    @test isapprox(par1.unexplained, [1.47, 0.02], rtol = 1e-2, atol = 1e-2)
 end
 
 @testset "Check fitting (regularized)" begin
 
-    Random.seed!(123)
+    rng = StableRNG(123)
 
     n = 1000     # Number of groups
     m = 5        # Number of observations per group
@@ -151,7 +152,7 @@ end
     y = copy(ey)
     ii = 0
     for i = 1:n
-        y[ii+1:ii+m] .+= cmr.L * randn(m)
+        y[ii+1:ii+m] .+= cmr.L * randn(rng, m)
         ii += m
     end
 
@@ -182,7 +183,7 @@ end
 
 @testset "Check fitting (simple)" begin
 
-    Random.seed!(123)
+    rng = StableRNG(123)
 
     n = 1000 # Number of groups
     m = 5    # Average number of observations per group
@@ -207,7 +208,7 @@ end
     y = copy(ey)
     ii = 0
     for i = 1:n
-        y[ii+1:ii+m] .+= cmr.L * randn(m)
+        y[ii+1:ii+m] .+= cmr.L * randn(rng, m)
         ii += m
     end
 
@@ -257,7 +258,6 @@ end
     # sc[i] are zero outside of column i so only compute
     # column i of the gradient.
     for i in eachindex(ti)
-
         # Check gradient with respect to scale
         ee = 1e-5
         sc1 = copy(sc)
@@ -275,7 +275,5 @@ end
         cc1 = covmat(c1, ti)
         d = (cc1 .- cc) ./ ee
         @test isapprox(d[:, i], jsm[i], rtol = 1e-5, atol = 1e-5)
-
     end
-
 end

@@ -1,10 +1,13 @@
-function genx(N, fix_unexplained, par)
+using Random
+
+function genx(N, fix_unexplained, par; rng = Random.GLOBAL_RNG)
 
     # Design matrices
-    X_mean = randn(N, length(par.mean))
-    X_scale = randn(N, length(par.scale))
-    X_smooth = randn(N, length(par.smooth))
+    X_mean = randn(rng, N, length(par.mean))
+    X_scale = randn(rng, N, length(par.scale))
+    X_smooth = randn(rng, N, length(par.smooth))
     X_unexplained = randn(
+        rng,
         N,
         length(fix_unexplained) == 0 ? length(par.unexplained) : length(fix_unexplained),
     )
@@ -46,7 +49,7 @@ end
 
 Simulate data from a fitted ProcessRegression model.
 =#
-function emulate(pm::ProcessMLEModel; par = nothing)
+function emulate(pm::ProcessMLEModel; rng = Random.GLOBAL_RNG, par = nothing)
     par = isnothing(par) ? pm.params : par
     y_mean = pm.X.mean * par.mean
     grp = pm.grp
@@ -57,7 +60,7 @@ function emulate(pm::ProcessMLEModel; par = nothing)
         cpar = covpar(pm, par, i1, i2)
         cm = covmat(cpar, pm.time[i1:i2])
         cr = cholesky(cm)
-        y[i1:i2] .+= cr.U' * randn(i2 - i1 + 1)
+        y[i1:i2] .+= cr.U' * randn(rng, i2 - i1 + 1)
     end
 
     return y
