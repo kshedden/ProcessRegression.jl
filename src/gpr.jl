@@ -68,18 +68,18 @@ function loglike(m::ProcessMLEModel{T}, par::GaussianParams{T})::T where {T<:Rea
         cm = covmat(cpar, m.time[i1:i2])
 
         # Out of bounds
-        if any(.!isfinite.(cm))
+        if !all(isfinite.(cm))
             return -Inf
         end
 
         # Update the likelihood
         re = resid[i1:i2]
         a, _ = eigen(cm)
-        if minimum(a) <= 0
+        if minimum(a) <= 1e-15
             return -Inf
         end
         ll -= 0.5 * sum(log, a)
-        ll -= 0.5 * dot(re, cm \ re)
+        ll -= 0.5 * dot(re, pinv(cm) * re)
 
     end
 
@@ -230,15 +230,15 @@ end
 function _fit!(
     m::ProcessMLEModel,
     verbose::Bool,
-    maxiter::Int,
+    maxiter::Vector{Int},
+    algorithms::Vector,
     atol::Float64,
     rtol::Float64,
     start;
-    maxiter_gd = 20,
-    algorithm = LBFGS(),
-    g_tol = 1e-8,
+    g_tol = 1e-8, # unused
     skip_se = false,
 )
+    @assert length(maxiter) == length(algorithms)
 
     pmn, psc = size(m.X.mean, 2), size(m.X.scale, 2)
     psm, pux = size(m.X.smooth, 2), size(m.X.unexplained, 2)
@@ -259,28 +259,23 @@ function _fit!(
         start = getstart(m)
     end
 
-    # Refine starting values using gradient sescent
-    r = optimize(
-        f,
-        g!,
-        typeof(start) <: ProcessParams ? pack(start) : start,
-        GradientDescent(),
-        Optim.Options(iterations = maxiter_gd, show_trace = verbose),
-    )
-
-    r = optimize(
-        f,
-        g!,
-        Optim.minimizer(r),
-        algorithm,
-        Optim.Options(iterations = maxiter, show_trace = verbose, g_tol = g_tol),
-    )
+    b = typeof(start) <: ProcessParams ? pack(start) : start
+    r = nothing
+    for j in eachindex(algorithms)
+        r = optimize(
+            f,
+            g!,
+            b,
+            algorithms[j],
+            Optim.Options(iterations = maxiter[j], show_trace = verbose),
+        )
+        b = Optim.minimizer(r)
+    end
 
     if !Optim.converged(r)
         println("ProcessRegression fitting did not converge")
     end
 
-    b = Optim.minimizer(r)
     m.params = unpack(m, b)
 
     # Use numerical differentiation to get the Hessian.
@@ -307,13 +302,14 @@ end
 function StatsBase.fit!(
     m::ProcessModel;
     verbose::Bool = false,
-    maxiter::Integer = 100,
+    maxiter::Vector{Int} = [20, 100],
+    algorithms::Vector = [GradientDescent(), LBFGS()],
     atol::Real = 1e-6,
     rtol::Real = 1e-6,
     start = nothing,
     kwargs...,
 )
-    _fit!(m, verbose, maxiter, atol, rtol, start; kwargs...)
+    _fit!(m, verbose, maxiter, algorithms, atol, rtol, start; kwargs...)
 end
 
 function fit(

@@ -118,9 +118,9 @@ end
 
     # Regression tests
     par1 = pm1.params
-    @test isapprox(par1.mean, [0.89, 0.25], rtol = 1e-2, atol = 1e-2)
-    @test isapprox(par1.scale, [1.01, -1.52], rtol = 1e-2, atol = 1e-2)
-    @test isapprox(par1.smooth, [0.06, 0.01], rtol = 1e-2, atol = 1e-2)
+    @test isapprox(par1.mean, [0.89, 0.01], rtol = 1e-2, atol = 1e-2)
+    @test isapprox(par1.scale, [1.04, -1.8], rtol = 1e-2, atol = 1e-2)
+    @test isapprox(par1.smooth, [-0.03, -0.09], rtol = 1e-2, atol = 1e-2)
     @test isapprox(par1.unexplained, [1.47, 0.02], rtol = 1e-2, atol = 1e-2)
 end
 

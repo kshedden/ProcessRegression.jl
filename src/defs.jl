@@ -161,7 +161,6 @@ mutable struct GaussianCovPar{T} <: ProcessCovPar where {T<:AbstractFloat}
 
     unexplained::Vector{T}
     lunexplained::Vector{T}
-
 end
 
 #=

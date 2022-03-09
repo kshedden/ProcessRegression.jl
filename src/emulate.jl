@@ -59,8 +59,12 @@ function emulate(pm::ProcessMLEModel; rng = Random.GLOBAL_RNG, par = nothing)
     for (i1, i2) in eachcol(grp)
         cpar = covpar(pm, par, i1, i2)
         cm = covmat(cpar, pm.time[i1:i2])
-        cr = cholesky(cm)
-        y[i1:i2] .+= cr.U' * randn(rng, i2 - i1 + 1)
+        if !all(isfinite.(cm))
+            println(cpar)
+            println(cm)
+        end
+        a, b = eigen(cm)
+        y[i1:i2] .+= b * diagm(sqrt.(a)) * randn(rng, i2 - i1 + 1)
     end
 
     return y
